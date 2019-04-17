@@ -1,52 +1,69 @@
 #! /usr/bin/env ruby
 require 'pg'
 
-def display_help_content
-puts <<~HELP
-  An expense recording system
-
-  Commands:
-
-  add AMOUNT MEMO [DATE] - record a new expense
-  clear - delete all expenses
-  list - list all expenses
-  delete NUMBER - remove expene with id NUMBER
-  search QUERY - list expenses with a matching memo field
-
-  HELP
-end
-
-def list_expenses
-  db = PG.connect(dbname: "expenses")
-  result = db.exec("SELECT * FROM expenses ORDER BY created_on ASC;")
-  result.each do |tuple|
-    columns = [
-      tuple['id'].rjust(3),
-      tuple['created_on'].rjust(10),
-      tuple['amount'].rjust(12),
-      tuple['memo']
-      ]
-    puts columns.join(" | ")
+class ExpenseData
+  def initialize
+    @connection = PG.connect(dbname: "expenses")
   end
-end
 
-def add_expense(amount, memo, date="NOW()")
-  if amount.nil? || memo.nil?
-    puts "You must provide an amount and memo."
-  else
-    db = PG.connect(dbname: "expenses")
-    db.exec_params("INSERT INTO expenses (amount, memo, created_on)
-    VALUES ($1, $2, $3)", [amount, memo, date])
+  def list_expenses
+    result = @connection.exec("SELECT * FROM expenses ORDER BY created_on ASC;")
+    result.each do |tuple|
+      columns = [
+        tuple['id'].rjust(3),
+        tuple['created_on'].rjust(10),
+        tuple['amount'].rjust(12),
+        tuple['memo']
+        ]
+      puts columns.join(" | ")
+    end
   end
-  puts "Expense successfully added."
+
+  def add_expense(amount, memo, date="NOW()")
+    if amount.nil? || memo.nil?
+      puts "You must provide an amount and memo."
+    else
+      @connection.exec_params("INSERT INTO expenses (amount, memo, created_on)
+      VALUES ($1, $2, $3)", [amount, memo, date])
+    end
+    puts "Expense successfully added."
+  end
+
 end
 
-command = ARGV.first
+class CLI
+  def initialize
+    @expense_data = ExpenseData.new
+  end
 
-if command == "list"
-  list_expenses
-elsif command == "add"
-  add_expense(ARGV[1], ARGV[2], ARGV[3]="NOW()")
-else
-  display_help_content
+  def run(arguments)
+    command = arguments.first
+
+    if command == "list"
+      @expense_data.list_expenses
+    elsif command == "add"
+      @expense_data.add_expense(arguments[1], arguments[2], arguments[3]="NOW()")
+    else
+      display_help_content
+    end
+  end
+
+  def display_help_content
+    puts <<~HELP
+      An expense recording system
+
+      Commands:
+
+      add AMOUNT MEMO [DATE] - record a new expense
+      clear - delete all expenses
+      list - list all expenses
+      delete NUMBER - remove expense with id NUMBER
+      search QUERY - list expenses with a matching memo field
+
+      HELP
+  end
+
 end
+
+cli = CLI.new
+cli.run(ARGV)
